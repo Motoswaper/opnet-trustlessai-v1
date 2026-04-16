@@ -17,11 +17,13 @@ export class TrustlessAI {
   private static nextJobId: u64 = 1;
   private static jobs = new Map<u64, Job>();
   private static token: Address; // OP20 token address for payments
+  private static trustLayer: Address; // TrustLayer contract address
 
-  // Set OP20 token address (only once)
-  static init(token: Address): void {
+  // Initialize TrustlessAI with OP20 token + TrustLayer address
+  static init(token: Address, trustLayer: Address): void {
     assert(TrustlessAI.token == ZERO_ADDRESS, "ALREADY_INITIALIZED");
     TrustlessAI.token = token;
+    TrustlessAI.trustLayer = trustLayer;
   }
 
   // Create a new AI job
@@ -56,13 +58,25 @@ export class TrustlessAI {
     return jobId;
   }
 
-  // Accept a job
+  // Accept a job — WITH TRUSTLAYER INTEGRATION
   static acceptJob(jobId: u64): void {
     const worker = Context.sender();
     const job = TrustlessAI.jobs.get(jobId);
 
     assert(job != null, "JOB_NOT_FOUND");
     assert(job.status == 0, "JOB_NOT_AVAILABLE");
+
+    // --- TRUSTLAYER INTEGRATION ---
+    // Require worker to have AI_SAFE tag
+    assert(
+      TrustLayer.hasTag(worker, "AI_SAFE"),
+      "NOT_TRUSTED"
+    );
+
+    // Require minimum reputation
+    const rep = TrustLayer.reputation(worker);
+    assert(rep >= 3000, "LOW_REPUTATION");
+    // --- END TRUSTLAYER INTEGRATION ---
 
     job.worker = worker;
     job.status = 1;
